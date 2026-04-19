@@ -45,19 +45,39 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Phone number is strictly required.' });
         }
 
-        // Limit Check: Has this number submitted in the last 7 days?
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        // Calculate exact timestamp for Last Friday at 00:00 (Egypt Time / UTC+2)
+        function getLastFridayUTC2() {
+            const now = new Date();
+            const utcMs = now.getTime();
+            // Shift perspective by 2 hours conceptually
+            const egyptMs = utcMs + (2 * 60 * 60 * 1000);
+            const egyptDate = new Date(egyptMs);
+            
+            // Set mathematically to absolute midnight.
+            egyptDate.setUTCHours(0, 0, 0, 0);
+            
+            // Week day: 0=Sun, 1=Mon ... 5=Fri
+            const day = egyptDate.getUTCDay();
+            const diff = (day + 7 - 5) % 7;
+            egyptDate.setUTCDate(egyptDate.getUTCDate() - diff);
+            
+            // Revert back out of conceptual mode by subtracting 2 hours to get true UTC epoch map
+            const trueUtcLimitMs = egyptDate.getTime() - (2 * 60 * 60 * 1000);
+            return new Date(trueUtcLimitMs);
+        }
 
+        const activeLimitDate = getLastFridayUTC2();
+
+        // Limit Check: Has this number submitted since last Friday 00:00?
         const existsInLimit = await Complaint.findOne({ 
             phoneNumber: data.phoneNumber, 
-            createdAt: { $gte: sevenDaysAgo } 
+            createdAt: { $gte: activeLimitDate } 
         });
 
         if (existsInLimit) {
             return res.status(400).json({ 
                 success: false, 
-                message: 'You already have an active complaint this week. Please follow up on your existing complaint.',
+                message: 'لقد سجلت شكوى هذا الأسبوع. يمكنك التسجيل مجدداً يوم الجمعة القادم.',
                 code: 'LIMIT_EXCEEDED'
             });
         }
