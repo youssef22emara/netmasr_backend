@@ -45,6 +45,24 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Phone number is strictly required.' });
         }
 
+        // Verify reCAPTCHA
+        if (!data.recaptchaToken) {
+            return res.status(400).json({ success: false, message: 'Missing reCAPTCHA token. Please reload the page.' });
+        }
+
+        const verifyResponse = await fetch(`https://www.google.com/recaptcha/api/siteverify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `secret=6LchBcEsAAAAACox6yVJCiiCbX9DxxUsZB8SM02n&response=${data.recaptchaToken}`
+        });
+        
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyData.success || verifyData.score < 0.5) {
+            console.log('[API] reCAPTCHA failed or score too low:', verifyData);
+            return res.status(403).json({ success: false, message: 'تم رفض الطلب — يبدو أنك روبوت. حاول مجدداً.' });
+        }
+
         // Calculate exact timestamp for Last Friday at 00:00 (Egypt Time / UTC+2)
         function getLastFridayUTC2() {
             const now = new Date();
@@ -184,6 +202,41 @@ router.get('/', async (req, res) => {
     } catch (error) {
         console.error('[API] Error fetching complaints:', error);
         res.status(500).json({ success: false, message: 'Server error retrieving data.' });
+    }
+});
+
+// @route   GET /api/complaints/check
+// @desc    Check real-time if a phone number submitted since last Friday
+router.get('/check', async (req, res) => {
+    try {
+        const phoneParam = req.query.phone;
+        if (!phoneParam || phoneParam.length < 9) {
+            return res.status(400).json({ success: false, message: 'Invalid phone string.' });
+        }
+
+        const now = new Date();
+        const egyptOffset = 2 * 60; // UTC+2
+        const egyptNow = new Date(now.getTime() + (egyptOffset * 60000));
+        const dayOfWeek = egyptNow.getUTCDay(); // 0=Sun, 5=Fri
+        const daysFromFriday = (dayOfWeek >= 5) ? dayOfWeek - 5 : dayOfWeek + 2;
+        const lastFriday = new Date(egyptNow);
+        lastFriday.setUTCDate(egyptNow.getUTCDate() - daysFromFriday);
+        lastFriday.setUTCHours(0, 0, 0, 0);
+        const lastFridayUTC = new Date(lastFriday.getTime() - (egyptOffset * 60000));
+
+        const foundComplaint = await Complaint.findOne({
+            phoneNumber: phoneParam,
+            createdAt: { $gte: lastFridayUTC }
+        });
+
+        if (foundComplaint) {
+            return res.status(200).json({ available: false });
+        } else {
+            return res.status(200).json({ available: true });
+        }
+    } catch (error) {
+        console.error('[API] Error checking phone:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
