@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const complaintRoutes = require('./routes/complaintRoutes');
+const postRoutes = require('./routes/postRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/complaints', complaintRoutes);
+app.use('/api/posts', postRoutes);
 
 // Base route for testing
 app.get('/', (req, res) => {
