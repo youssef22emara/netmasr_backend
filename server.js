@@ -33,6 +33,6 @@ app.get('/', (req, res) => {
 // Start the server
 app.listen(PORT, () => {
     console.log(`===============================================`);
-    console.log(`🚀 NetMasr Backend Server is running on port ${PORT}`);
+    console.log(`🚀 NetMasr Backend Server v2 is running on port ${PORT}`);
     console.log(`===============================================`);
 });
